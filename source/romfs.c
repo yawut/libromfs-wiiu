@@ -1,3 +1,8 @@
+/*
+ * romfs.c
+ * Implements romfs devoptab using ustar fs
+ */
+
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -7,40 +12,34 @@
 #include <sys/dirent.h>
 #include <sys/iosupport.h>
 #include <sys/param.h>
+#include <stdint.h>
 #include <unistd.h>
-#include <zip.h>
+
+//!----------------------------------------------------------------------
+//! Filesystem tree functions
+//!----------------------------------------------------------------------
+
+typedef enum {
+	NODE_DIR,
+	NODE_FILE,
+} node_type_t;
 
 typedef struct _node node_t;
 struct _node {
-	char *name;
-	int inode;
-	enum {
-		NODE_DIR,
-		NODE_FILE,
-	} type;
+	char *		name;
+	unsigned	inode;
+	unsigned	size;
+	node_type_t	type;
+	time_t		mtime;
 	union {
-		unsigned izip;
-		node_t *ent;
+		uint8_t	*cont;	// NODE_FILE
+		node_t	*ent;	// NODE_DIR
 	};
-	node_t *next;
-	node_t *up;
+	node_t *	next;
+	node_t *	up;
 };
 
-typedef struct {
-	node_t *fsnode;
-	zip_file_t *zf;
-} romfs_file_t;
-
-typedef struct {
-	node_t *fsdir;
-	node_t *ent;
-	int idx;
-} romfs_dir_t;
-
-#define ROMFS_DIR_MODE	(S_IFDIR | S_IRUSR | S_IRGRP | S_IROTH)
-#define ROMFS_FILE_MODE	(S_IFREG | S_IRUSR | S_IRGRP | S_IROTH)
-
-node_t root = {
+static node_t fs_root = {
 	.inode = 0,
 	.name = "romfs:",
 	.type = NODE_DIR,
@@ -48,63 +47,59 @@ node_t root = {
 	.next = NULL,
 	.up = NULL,
 };
+static node_t *fs_cwd = &fs_root;
 
-/* TODO: find some better way to embed the zip */
-extern char _binary_romfs_zip_start[];
-extern char _binary_romfs_zip_size[];
+static unsigned n_nodes = 0;
 
-static int n_nodes = 0;
-static node_t *romfs_cwd = &root;
-static int romfs_initialised = 0;
-
-static zip_source_t *romfs_zip_src;
-static zip_t *romfs_zip;
-
-/* node_createfilepath
- * Create a node and all its parent directories */
-static void node_createfilepath (const char *_path, unsigned z_index) {
-	int len = strlen(_path);
-	if (len >= NAME_MAX)
-		return;
-	int isdir = _path[len-1] == '/';
-	node_t *n = &root;
+// Create a node and all its parent directories
+static void node_createfilepath (const char *_path, time_t mtime, int isdir, unsigned size, uint8_t *content) {
+	node_t *n = &fs_root;
 	char *path = strdup(_path), *path_s;
 	char *cur = strtok_r(path, "/", &path_s);	 
 	while (cur)  {
 		// check if there's another path next, and get it if it exists
 		char *next = strtok_r(NULL, "/", &path_s);
-		// check if the requested node already exists
-		node_t *c = NULL;
-		for (c = n->ent; c && strcmp(c->name, cur); c = c->next);
-		// if it doesn't, create it
-		if (!c) {
-			c = malloc(sizeof(node_t));
-			c->name = strdup(cur);
-			c->inode = ++n_nodes;
-			if (next || isdir) { // there's another path next, this is a dir
-				c->type = NODE_DIR;
-				c->ent = NULL;
-			} else { // there's no other path next, this is the file
-				c->type = NODE_FILE;
-				c->izip = z_index;
+		if (!strcmp(cur, ".")) {
+			n = n;
+		} else if (!strcmp(cur, "..")) {
+			if (n->up) n = n->up;
+		} else {
+			// check if the requested node already exists
+			node_t *c = NULL;
+			for (c = n->ent; c && strcmp(c->name, cur); c = c->next);
+			// if it doesn't, create it
+			if (!c) {
+				c = malloc(sizeof(node_t));
+				c->name = strdup(cur);
+				c->inode = ++n_nodes;
+				c->mtime = mtime;
+				if (next) { // there's another path next, this is a dir
+					c->type = NODE_DIR;
+					c->ent = NULL;
+				} else { // there's no other path next, this is the final node
+					c->size = size;
+					if (isdir) {
+						c->type = NODE_DIR;
+						c->ent = NULL;	
+					} else {
+						c->type = NODE_FILE;
+						c->cont = content;
+					}
+				}
+				// add the node to tree
+				c->up = n;
+				c->next = n->ent;
+				n->ent = c;
 			}
-			// add the node to tree
-			c->up = n;
-			c->next = n->ent;
-			n->ent = c;
+			// child node is now parent node
+			n = c;
 		}
-
-		// child node is now parent node
-		n = c;
 		cur = next;
 	}
 	free(path);
 }
 
-/* Frees the tree of nodes
- * Although limited to only 50 recursions,
- * it's a recursive function so make sure there's enough
- * stack. */
+// Frees the tree of nodes
 static void node_destroytree (node_t *n, int recursion) {
 	// this is the easier way, to prevent freeing the wrong part of tree first
 	static node_t **l_free = NULL;
@@ -112,7 +107,7 @@ static void node_destroytree (node_t *n, int recursion) {
 	if (!l_free)
 		l_free = malloc(n_nodes * sizeof(node_t *));
 	if (!n)
-		n = &root;
+		n = &fs_root;
 	// it's better to leave some stuff in the stack than risking a stack overflow,
 	// so if there are more than 50 levels of folders we stop here.
 	if (recursion > 50)
@@ -126,25 +121,21 @@ static void node_destroytree (node_t *n, int recursion) {
 	// if we're a recursive call, return now
 	if (recursion)
 		return;
-	// we're freeing the root node; shall the free() start
+	// we're freeing the fs_root node; shall the free() start
 	for (int i = 0; i < l_freecnt; i++)
 		free(l_free[i]);
 	// finish freeing stuff
 	free(l_free);
 	l_freecnt = 0;
 	l_free = NULL;
-	root.ent = NULL;
+	fs_root.ent = NULL;
 }
 
-/* Does much of the path parsing work; it will
- *  - remove "romfs:" when present
- *  - parse absolute/relative paths and add cwd
- *  - handle "." and ".."
- *  - get the node from the tree */
+// Parse path string and return the corresponding node
 static node_t *node_get (const char *_path) {
 	char* col_pos = strchr(_path, ':');
 	if (col_pos) _path = col_pos + 1;
-	node_t *n = (_path[0] == '/') ? &root : romfs_cwd;
+	node_t *n = (_path[0] == '/') ? &fs_root : fs_cwd;
 	char *path = strdup(_path), *path_s;
 	char *cur = strtok_r(path, "/", &path_s);
 	while (cur) {
@@ -153,7 +144,7 @@ static node_t *node_get (const char *_path) {
 			break;
 		}
 		if (!strcmp(cur, ".")) {
-			// nothing to do
+			n = n;
 		} else if (!strcmp(cur, "..")) {
 			if (n->up) n = n->up;
 		} else {
@@ -165,19 +156,74 @@ static node_t *node_get (const char *_path) {
 	return n;
 }
 
+//!----------------------------------------------------------------------
+//! TAR functions
+//!----------------------------------------------------------------------
+
+typedef struct __attribute__((packed)) {
+	char fname[100];
+	char mode[8];
+	char uid[8];
+	char gid[8];
+	char fsize[12];
+	char mtime[12];
+	char chksum[8];
+	char typeflag[1];
+	char link[100];
+	char tar_magic[6];
+	char tar_version[2];
+	char username[32];
+	char groupname[32];
+	char dev_maj[8];
+	char dev_min[8];
+	char prefix[155];
+	char pad[12];
+} tar_header_t;
+
+static unsigned oct2bin(uint8_t *c, int size) {
+	unsigned n = 0;
+	while (size-- > 0)
+		n = (n * 8) + (*(c++) - '0');
+	return n;
+}
+
+// Create tree entries for tar's files and folders
+static void tar_create_entries(uint8_t *ptr, uint8_t *end) {
+	tar_header_t *hdr = (tar_header_t *)ptr;
+	tar_header_t *ehdr = (tar_header_t *)end;
+	while ((hdr < ehdr) && !memcmp(hdr->tar_magic, "ustar", 5)) {
+		unsigned fsize = oct2bin(hdr->fsize, 11);
+		unsigned mtime = oct2bin(hdr->mtime, 11);
+		int isdir = hdr->typeflag[0] == '5';
+		int isfile = hdr->typeflag[0] == '0';
+		if (isfile || isdir)
+			node_createfilepath(hdr->fname, mtime, isdir, fsize, (uint8_t *)(hdr + 1));
+		hdr += ((fsize + 511) / 512) + 1;
+	}
+}
+
+//!----------------------------------------------------------------------
+//! Devoptab functions
+//!----------------------------------------------------------------------
+
+typedef struct {
+	node_t *fsnode;
+	off_t pos;
+} romfs_file_t;
+
+typedef struct {
+	node_t *fsdir;
+	node_t *ent;
+	int idx;
+} romfs_dir_t;
+
+#define ROMFS_DIR_MODE	(S_IFDIR | S_IRUSR | S_IRGRP | S_IROTH)
+#define ROMFS_FILE_MODE	(S_IFREG | S_IRUSR | S_IRGRP | S_IROTH)
+
 static int romfs_open (struct _reent *r, void *fileStruct, const char *ipath, int flags, int mode) {
 	romfs_file_t *fobj = (romfs_file_t *)fileStruct;
 	fobj->fsnode = node_get(ipath);
 	if (!fobj->fsnode) {
-		r->_errno = ENOENT;
-		return -1;
-	}
-	if (fobj->fsnode->type != NODE_DIR) {
-		r->_errno = EINVAL;
-		return -1;
-	}
-	fobj->zf = zip_fopen_index(romfs_zip, fobj->fsnode->izip, 0);
-	if (!fobj->zf) {
 		if(flags & O_CREAT)
 			r->_errno = EROFS;
 		else
@@ -187,57 +233,71 @@ static int romfs_open (struct _reent *r, void *fileStruct, const char *ipath, in
 		r->_errno = EEXIST;
 		return -1;
 	}
-	
+	if (fobj->fsnode->type != NODE_FILE) {
+		r->_errno = EINVAL;
+		return -1;
+	}
+	fobj->pos = 0;
 	return 0;
 }
 
 
 static int romfs_close(struct _reent *r, void *fd) {
-	romfs_file_t *fobj = (romfs_file_t *)fd;
-	if (zip_fclose(fobj->zf)) {
-		r->_errno = EINVAL;
-		return -1;
-	}
 	return 0;
 }
 
 static ssize_t romfs_read(struct _reent *r, void *fd, char *ptr, size_t len) {
-	romfs_file_t *fobj = (romfs_file_t *)fd;
-	ssize_t n = zip_fread(fobj->zf, ptr, len);
-	if (n < 0) {
-		r->_errno = EIO;
-		return -1;
-	}
-	return n;
+	romfs_file_t *fobj = (romfs_file_t *)fd;	
+	size_t end_pos = fobj->pos + len;
+	if(fobj->pos >= fobj->fsnode->size)
+		return 0;
+	if((fobj->pos + len) > fobj->fsnode->size)
+		len = fobj->fsnode->size - fobj->pos;
+	memcpy(ptr, fobj->fsnode->cont + fobj->pos, len);
+	fobj->pos += len;
+	return len;
 }
 
 static off_t romfs_seek(struct _reent *r, void *fd, off_t pos, int dir) {
 	romfs_file_t *fobj = (romfs_file_t *)fd;
-	if(zip_fseek(fobj->zf, pos, dir) == -1) {
-		r->_errno = EINVAL;
+	off_t start;
+	switch (dir) {
+		case SEEK_SET:
+			start = 0;
+			break;
+		case SEEK_CUR:
+			start = fobj->pos;
+			break;
+		case SEEK_END:
+			start = fobj->fsnode->size;
+			break;
+		default:
+			r->_errno = EINVAL;
+			return -1;
+    }
+	if(pos < 0) {
+		if(start + pos < 0) {
+			r->_errno = EINVAL;
+			return -1;
+		}
+	} else if(INT32_MAX - pos < start) {
+		r->_errno = EOVERFLOW;
 		return -1;
 	}
-	return zip_ftell(fobj->zf);
+    fobj->pos = start + pos;
+    return fobj->pos;
 }
 
 static int romfs_fstat(struct _reent *r, void *fd, struct stat *st) {
 	romfs_file_t *fobj = (romfs_file_t *)fd;
 	memset(st, 0, sizeof(struct stat));
-	
-	zip_stat_t zst;
-	if (zip_stat_index(romfs_zip, fobj->fsnode->izip, 0, &zst) == -1) {
-		r->_errno = EIO;
-		return -1;
-	}
-	
-	if(zst.valid & ZIP_STAT_SIZE) st->st_size  = zst.size;
-	if(zst.valid & ZIP_STAT_MTIME) st->st_atime = st->st_mtime = st->st_ctime = zst.mtime;
+	st->st_size  = fobj->fsnode->size;
+	st->st_atime = st->st_mtime = st->st_ctime = fobj->fsnode->mtime;
 	st->st_ino = fobj->fsnode->inode;
 	st->st_mode  = ROMFS_FILE_MODE;
 	st->st_nlink = 1;
 	st->st_blksize = 512;
 	st->st_blocks  = (st->st_blksize + 511) / 512;
-
 	return 0;
 }
 
@@ -247,21 +307,14 @@ static int romfs_stat(struct _reent *r, const char *ipath, struct stat *st) {
 		r->_errno = ENOENT;
 		return -1;
 	}
-	
-	zip_stat_t zst;
-	if (zip_stat_index(romfs_zip, fsnode->izip, 0, &zst) == -1) {
-		r->_errno = EIO;
-		return -1;
-	}
-	
-	if(zst.valid & ZIP_STAT_SIZE) st->st_size  = zst.size;
-	if(zst.valid & ZIP_STAT_MTIME) st->st_atime = st->st_mtime = st->st_ctime = zst.mtime;
+	memset(st, 0, sizeof(struct stat));
+	st->st_size  = fsnode->size;
+	st->st_atime = st->st_mtime = st->st_ctime = fsnode->mtime;
 	st->st_ino = fsnode->inode;
 	st->st_mode  = (fsnode->type == NODE_FILE) ? ROMFS_FILE_MODE : ROMFS_DIR_MODE;
 	st->st_nlink = 1;
 	st->st_blksize = 512;
 	st->st_blocks  = (st->st_blksize + 511) / 512;
-
 	return 0;
 }
 
@@ -271,7 +324,7 @@ static int romfs_chdir(struct _reent *r, const char *ipath) {
 		r->_errno = ENOENT;
 		return -1;
 	}
-	romfs_cwd = fsdir;
+	fs_cwd = fsdir;
 	return 0;
 }
 
@@ -282,19 +335,23 @@ static DIR_ITER* romfs_diropen(struct _reent *r, DIR_ITER *dirState, const char 
 		r->_errno = ENOENT;
 		return NULL;
 	}
+	if (dirobj->fsdir->type != NODE_DIR) {
+		r->_errno = EINVAL;
+		return NULL;
+	}
 	dirobj->ent = dirobj->fsdir->ent;
 	dirobj->idx = 0;
 	return dirState;
 }
 
-int romfs_dirreset(struct _reent *r, DIR_ITER *dirState) {
+static int romfs_dirreset(struct _reent *r, DIR_ITER *dirState) {
 	romfs_dir_t* dirobj = (romfs_dir_t*)(dirState->dirStruct);
 	dirobj->ent = dirobj->fsdir->ent;
 	dirobj->idx = 0;
 	return 0;
 }
 
-int romfs_dirnext(struct _reent *r, DIR_ITER *dirState, char *filename, struct stat *filestat) {
+static int romfs_dirnext(struct _reent *r, DIR_ITER *dirState, char *filename, struct stat *filestat) {
 	romfs_dir_t* dirobj = (romfs_dir_t*)(dirState->dirStruct);
 
 	if (dirobj->idx == 0) { // .
@@ -306,7 +363,7 @@ int romfs_dirnext(struct _reent *r, DIR_ITER *dirState, char *filename, struct s
 		return 0;
 	} else if (dirobj->idx == 1) { // ..
 		node_t* updir = dirobj->fsdir->up;
-		if (!updir) updir = &root;
+		if (!updir) updir = &fs_root;
 		memset(filestat, 0, sizeof(*filestat));
 		filestat->st_ino = updir->inode;
 		filestat->st_mode = ROMFS_DIR_MODE;
@@ -354,64 +411,32 @@ static devoptab_t romfs_devoptab = {
 	.deviceData   = NULL,
 };
 
-uint32_t romfsInit() {
-	zip_error_t error;
+//!----------------------------------------------------------------------
+//! Library functions
+//!----------------------------------------------------------------------
 
+extern char _binary_romfs_tar_start[];
+extern char _binary_romfs_tar_end[];
+
+static int romfs_initialised = 0;
+
+uint32_t romfsInit() {
 	if (romfs_initialised)
 		return 0;
-
-	zip_error_init(&error);
-
-	// try to create zip source
-	if ((romfs_zip_src = zip_source_buffer_create(_binary_romfs_zip_start, (int)_binary_romfs_zip_size, 1, &error)) == NULL) {
-		zip_error_fini(&error);
-		return 1;
-	}
-
-	// try to open zip archive from source
-	if ((romfs_zip = zip_open_from_source(romfs_zip_src, 0, &error)) == NULL) {
-		zip_source_free(romfs_zip_src);
-		zip_error_fini(&error);
-		return 1;
-	}
-	zip_error_fini(&error);
-
-	// create the fs nodes from files in the zip
-	zip_stat_t sb;
-	for (int i = 0; i < zip_get_num_entries(romfs_zip, 0); i++)
-		if (zip_stat_index(romfs_zip, i, 0, &sb) == 0)
-			node_createfilepath(sb.name, i);
-
-	// add the devoptab
+	tar_create_entries(_binary_romfs_tar_start, _binary_romfs_tar_end);
 	if (AddDevice(&romfs_devoptab) == -1) {
-		zip_close(romfs_zip);
-		zip_source_free(romfs_zip_src);
+		node_destroytree(NULL, 0);
 		return 1;
 	}
-
 	romfs_initialised = 1;
-
 	return 0;
 }
 
 uint32_t romfsExit() {
 	if (!romfs_initialised)
 		return 1;
-
-	// remove the devoptab
 	RemoveDevice("romfs:");
-
-	// destroy the tree of nodes
 	node_destroytree(NULL, 0);
-
-	// close archive
-	if (zip_close(romfs_zip) < 0)
-		return 1;
-
-	// free zip source
-	zip_source_free(romfs_zip_src);
-
 	romfs_initialised = 0;
-
 	return 0;
 }

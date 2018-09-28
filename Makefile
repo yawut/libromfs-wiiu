@@ -24,7 +24,7 @@ install: $(TARGET)
 	cp -f -a $(SHARE)/. $(PORTLIBS)/share/
 	cp -f -a $(INCLUDE)/. $(PORTLIBS)/include/
 clean:
-	rm -rf $(OFILES) $(TARGET)
+	rm -rf $(OFILES) $(CFILES:.c=.d) $(TARGET)
 
 #---------------------------------------------------------------------------------
 # wut and portlibs
@@ -32,4 +32,4 @@ clean:
 include $(WUT_ROOT)/share/wut.mk
 PORTLIBS	:=	$(DEVKITPRO)/portlibs/ppc
 LDFLAGS		+=	-L$(PORTLIBS)/lib
-CFLAGS		+=	-I$(PORTLIBS)/include -I$(PORTLIBS)/include/zip-romfs
+CFLAGS		+=	-I$(PORTLIBS)/include
