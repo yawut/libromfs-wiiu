@@ -10,6 +10,7 @@ SHARE		:=	./share
 SOURCES		:=	source
 CFILES		:=	$(foreach dir,$(SOURCES),$(wildcard $(dir)/*.c))
 OFILES		:=	$(CFILES:.c=.o)
+INSTALLDIR	?=	$(PORTLIBS)
 
 #---------------------------------------------------------------------------------
 # Build rules
@@ -17,12 +18,12 @@ OFILES		:=	$(CFILES:.c=.o)
 .PHONY: clean install
 $(TARGET): $(OFILES)
 install: $(TARGET)
-	mkdir -p $(PORTLIBS)/lib
-	mkdir -p $(PORTLIBS)/share
-	mkdir -p $(PORTLIBS)/include
-	cp -f $(TARGET) $(PORTLIBS)/lib/
-	cp -f -a $(SHARE)/. $(PORTLIBS)/share/
-	cp -f -a $(INCLUDE)/. $(PORTLIBS)/include/
+	mkdir -p $(INSTALLDIR)/lib
+	mkdir -p $(INSTALLDIR)/share
+	mkdir -p $(INSTALLDIR)/include
+	cp -f $(TARGET) $(INSTALLDIR)/lib/
+	cp -f -a $(SHARE)/. $(INSTALLDIR)/share/
+	cp -f -a $(INCLUDE)/. $(INSTALLDIR)/include/
 clean:
 	rm -rf $(OFILES) $(CFILES:.c=.d) $(TARGET)
 
