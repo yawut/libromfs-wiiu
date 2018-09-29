@@ -14,6 +14,7 @@
 #include <sys/param.h>
 #include <stdint.h>
 #include <unistd.h>
+#include <coreinit/memory.h>
 
 //!----------------------------------------------------------------------
 //! Filesystem tree functions
@@ -253,7 +254,7 @@ static ssize_t romfs_read(struct _reent *r, void *fd, char *ptr, size_t len) {
 		return 0;
 	if((fobj->pos + len) > fobj->fsnode->size)
 		len = fobj->fsnode->size - fobj->pos;
-	memcpy(ptr, fobj->fsnode->cont + fobj->pos, len);
+	OSBlockMove(ptr, fobj->fsnode->cont + fobj->pos, len, FALSE);
 	fobj->pos += len;
 	return len;
 }

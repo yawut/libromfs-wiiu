@@ -11,6 +11,7 @@ SOURCES		:=	source
 CFILES		:=	$(foreach dir,$(SOURCES),$(wildcard $(dir)/*.c))
 OFILES		:=	$(CFILES:.c=.o)
 INSTALLDIR	?=	$(PORTLIBS)
+CFLAGS		+=	-O3
 
 #---------------------------------------------------------------------------------
 # Build rules
