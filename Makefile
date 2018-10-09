@@ -10,7 +10,7 @@ SHARE		:=	./share
 SOURCES		:=	source
 CFILES		:=	$(foreach dir,$(SOURCES),$(wildcard $(dir)/*.c))
 OFILES		:=	$(CFILES:.c=.o)
-INSTALLDIR	?=	$(PORTLIBS)
+INSTALLDIR	?=	$(WUT_ROOT)
 CFLAGS		+=	-O3
 
 #---------------------------------------------------------------------------------
@@ -29,9 +29,6 @@ clean:
 	rm -rf $(OFILES) $(CFILES:.c=.d) $(TARGET)
 
 #---------------------------------------------------------------------------------
-# wut and portlibs
+# wut
 #---------------------------------------------------------------------------------
 include $(WUT_ROOT)/share/wut.mk
-PORTLIBS	:=	$(DEVKITPRO)/portlibs/ppc
-LDFLAGS		+=	-L$(PORTLIBS)/lib
-CFLAGS		+=	-I$(PORTLIBS)/include

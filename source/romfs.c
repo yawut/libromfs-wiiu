@@ -416,26 +416,28 @@ static devoptab_t romfs_devoptab = {
 //! Library functions
 //!----------------------------------------------------------------------
 
-extern char _binary_romfs_tar_start[];
-extern char _binary_romfs_tar_end[];
+extern char _binary_romfs_tar_start[] __attribute__((weak));
+extern char _binary_romfs_tar_end[] __attribute__((weak));
 
 static int romfs_initialised = 0;
 
-uint32_t romfsInit() {
+int romfsInit(void) {
 	if (romfs_initialised)
 		return 0;
+	if (!_binary_romfs_tar_start || !_binary_romfs_tar_end)
+		return -2;
 	tar_create_entries(_binary_romfs_tar_start, _binary_romfs_tar_end);
 	if (AddDevice(&romfs_devoptab) == -1) {
 		node_destroytree(NULL, 0);
-		return 1;
+		return -1;
 	}
 	romfs_initialised = 1;
 	return 0;
 }
 
-uint32_t romfsExit() {
+int romfsExit(void) {
 	if (!romfs_initialised)
-		return 1;
+		return -1;
 	RemoveDevice("romfs:");
 	node_destroytree(NULL, 0);
 	romfs_initialised = 0;

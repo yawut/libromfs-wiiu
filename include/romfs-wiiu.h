@@ -1,15 +1,16 @@
-#ifndef __WIIU_ROMFS
-#define __WIIU_ROMFS
+#pragma once
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-uint32_t romfsInit();
-uint32_t romfsExit();
+
+int romfsInit(void);
+
+
+int romfsExit(void);
+
 
 #ifdef __cplusplus
 }
-#endif
-
 #endif
