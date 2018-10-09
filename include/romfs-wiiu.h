@@ -4,11 +4,25 @@
 extern "C" {
 #endif
 
+#include <stdint.h>
 
-int romfsInit(void);
+/*
+	romfsInit()
+	Mounts app's romfs.
 
+	Returns 0 if succesfull or a negative
+	value if there was an error
+*/
+int32_t romfsInit(void);
 
-int romfsExit(void);
+/*
+	romfsExit()
+	Unmounts app's romfs.
+
+	Returns 0 if succesfull or a negative
+	value if there was an error
+*/
+int32_t romfsExit(void);
 
 
 #ifdef __cplusplus

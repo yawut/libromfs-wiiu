@@ -28,8 +28,8 @@ typedef enum {
 typedef struct _node node_t;
 struct _node {
 	char *		name;
-	unsigned	inode;
-	unsigned	size;
+	uint32_t	inode;
+	uint32_t	size;
 	node_type_t	type;
 	time_t		mtime;
 	union {
@@ -50,10 +50,10 @@ static node_t fs_root = {
 };
 static node_t *fs_cwd = &fs_root;
 
-static unsigned n_nodes = 0;
+static uint32_t n_nodes = 0;
 
 // Create a node and all its parent directories
-static void node_createfilepath (const char *_path, time_t mtime, int isdir, unsigned size, uint8_t *content) {
+static void node_createfilepath (const char *_path, time_t mtime, int32_t isdir, uint32_t size, uint8_t *content) {
 	node_t *n = &fs_root;
 	char *path = strdup(_path), *path_s;
 	char *cur = strtok_r(path, "/", &path_s);	 
@@ -101,10 +101,10 @@ static void node_createfilepath (const char *_path, time_t mtime, int isdir, uns
 }
 
 // Frees the tree of nodes
-static void node_destroytree (node_t *n, int recursion) {
+static void node_destroytree (node_t *n, int32_t recursion) {
 	// this is the easier way, to prevent freeing the wrong part of tree first
 	static node_t **l_free = NULL;
-	static unsigned l_freecnt = 0;
+	static uint32_t l_freecnt = 0;
 	if (!l_free)
 		l_free = malloc(n_nodes * sizeof(node_t *));
 	if (!n)
@@ -123,7 +123,7 @@ static void node_destroytree (node_t *n, int recursion) {
 	if (recursion)
 		return;
 	// we're freeing the fs_root node; shall the free() start
-	for (int i = 0; i < l_freecnt; i++)
+	for (int32_t i = 0; i < l_freecnt; i++)
 		free(l_free[i]);
 	// finish freeing stuff
 	free(l_free);
@@ -181,8 +181,8 @@ typedef struct __attribute__((packed)) {
 	char pad[12];
 } tar_header_t;
 
-static unsigned oct2bin(uint8_t *c, int size) {
-	unsigned n = 0;
+static uint32_t oct2bin(uint8_t *c, int32_t size) {
+	uint32_t n = 0;
 	while (size-- > 0)
 		n = (n * 8) + (*(c++) - '0');
 	return n;
@@ -193,10 +193,10 @@ static void tar_create_entries(uint8_t *ptr, uint8_t *end) {
 	tar_header_t *hdr = (tar_header_t *)ptr;
 	tar_header_t *ehdr = (tar_header_t *)end;
 	while ((hdr < ehdr) && !memcmp(hdr->tar_magic, "ustar", 5)) {
-		unsigned fsize = oct2bin(hdr->fsize, 11);
-		unsigned mtime = oct2bin(hdr->mtime, 11);
-		int isdir = hdr->typeflag[0] == '5';
-		int isfile = hdr->typeflag[0] == '0';
+		uint32_t fsize = oct2bin(hdr->fsize, 11);
+		uint32_t mtime = oct2bin(hdr->mtime, 11);
+		int32_t isdir = hdr->typeflag[0] == '5';
+		int32_t isfile = hdr->typeflag[0] == '0';
 		if (isfile || isdir)
 			node_createfilepath(hdr->fname, mtime, isdir, fsize, (uint8_t *)(hdr + 1));
 		hdr += ((fsize + 511) / 512) + 1;
@@ -215,7 +215,7 @@ typedef struct {
 typedef struct {
 	node_t *fsdir;
 	node_t *ent;
-	int idx;
+	int32_t idx;
 } romfs_dir_t;
 
 #define ROMFS_DIR_MODE	(S_IFDIR | S_IRUSR | S_IRGRP | S_IROTH)
@@ -419,9 +419,9 @@ static devoptab_t romfs_devoptab = {
 extern char _binary_romfs_tar_start[] __attribute__((weak));
 extern char _binary_romfs_tar_end[] __attribute__((weak));
 
-static int romfs_initialised = 0;
+static int32_t romfs_initialised = 0;
 
-int romfsInit(void) {
+int32_t romfsInit(void) {
 	if (romfs_initialised)
 		return 0;
 	if (!_binary_romfs_tar_start || !_binary_romfs_tar_end)
@@ -435,7 +435,7 @@ int romfsInit(void) {
 	return 0;
 }
 
-int romfsExit(void) {
+int32_t romfsExit(void) {
 	if (!romfs_initialised)
 		return -1;
 	RemoveDevice("romfs:");

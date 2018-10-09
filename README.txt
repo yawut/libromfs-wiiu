@@ -15,11 +15,11 @@ This library is made for use with WUT
 **** API ****
 <romfs-wiiu.h> is the main header
 
-  int romfsInit(void)    
+  int32_t romfsInit(void)    
     Mounts app's romfs. Returns 0 if succesfull or a negative
     value if there was an error
 
-  int romfsExit(void)
+  int32_t romfsExit(void)
     Unmounts app's romfs. Returns 0 if succesfull or a negative
     value if there was an error
 
