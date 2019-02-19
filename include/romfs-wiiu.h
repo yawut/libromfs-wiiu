@@ -1,4 +1,5 @@
-#pragma once
+#ifndef _ROMFS_WIIU_H
+#define _ROMFS_WIIU_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -7,24 +8,20 @@ extern "C" {
 #include <stdint.h>
 
 /*
-	romfsInit()
-	Mounts app's romfs.
-
-	Returns 0 if succesfull or a negative
-	value if there was an error
+	romfsInit: mount romfs
+	returns 0 when successful or a negative value for errors
 */
 int32_t romfsInit(void);
 
 /*
-	romfsExit()
-	Unmounts app's romfs.
-
-	Returns 0 if succesfull or a negative
-	value if there was an error
+	romfsExit: unmount romfs
+	returns 0 when successful or a negative value for errors
 */
 int32_t romfsExit(void);
 
 
 #ifdef __cplusplus
 }
+#endif
+
 #endif
