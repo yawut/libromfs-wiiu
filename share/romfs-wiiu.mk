@@ -3,6 +3,7 @@ ifneq ($(strip $(V)), 1)
 endif
 
 ROMFS_LDFLAGS	:=	-lromfs-wiiu
+ROMFS_CFLAGS	:=	-I$(DEVKITPRO)/portlibs/wiiu/include
 
 ifneq ($(strip $(ROMFS)),)
 
