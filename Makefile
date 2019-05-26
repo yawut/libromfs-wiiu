@@ -29,14 +29,14 @@ INSTALL		:=	$(PORTLIBS_PATH)/wiiu
 #-------------------------------------------------------------------------------
 # options for code generation
 #-------------------------------------------------------------------------------
-CFLAGS		:=	-g -Wall -O2 -ffunction-sections \
+CFLAGS		:=	-Wall -O2 -ffunction-sections \
 			$(MACHDEP)
 
 CFLAGS		+=	$(INCLUDE) -D__WIIU__ -D__WUT__
 
 CXXFLAGS	:=	$(CFLAGS)
 
-ASFLAGS		:=	-g $(MACHDEP)
+ASFLAGS		:=	$(MACHDEP)
 
 #-------------------------------------------------------------------------------
 # list of directories containing libraries, this must be the top level
