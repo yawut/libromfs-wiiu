@@ -22,7 +22,7 @@ struct _node
 	node_type_t	type;
 	time_t mtime;
 	union {
-		uint8_t *cont;	/* cont: file content for files */
+		char *cont;	/* cont: file content for files */
 		node_t *ent;	/* ent: subdirectory entry for directories */
 	};
 	node_t *next;
@@ -46,7 +46,7 @@ static node_t *fs_cwd = &fs_root;
 static uint32_t n_nodes = 0;
 
 /* node_createfilepath: create a node and all its parent directories */
-static void node_createfilepath (const char *cpath, time_t mtime, int32_t isdir, uint32_t size, uint8_t *content)
+static void node_createfilepath (const char *cpath, time_t mtime, int32_t isdir, uint32_t size, char *content)
 {
 	node_t *n = &fs_root;
 	

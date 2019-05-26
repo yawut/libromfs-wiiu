@@ -30,7 +30,7 @@ typedef struct __attribute__((packed))
 } tar_header_t;
 
 /* oct2bin: convert octal string to unsigned */
-static uint32_t oct2bin(uint8_t *c, int32_t size)
+static uint32_t oct2bin(char *c, int32_t size)
 {
 	uint32_t n = 0;
 	while (size-- > 0)
@@ -39,7 +39,7 @@ static uint32_t oct2bin(uint8_t *c, int32_t size)
 }
 
 /* tar_create_entries: create node tree entries for tar's files and folders */
-static void tar_create_entries(uint8_t *ptr, uint8_t *end)
+static void tar_create_entries(char *ptr, char *end)
 {
 	tar_header_t *hdr = (tar_header_t *)ptr;
 	tar_header_t *ehdr = (tar_header_t *)end;
@@ -56,7 +56,7 @@ static void tar_create_entries(uint8_t *ptr, uint8_t *end)
 		/* only files and directories are supported */
 		if (isfile || isdir)
 			/* create a node for the entry */
-			node_createfilepath(hdr->fname, mtime, isdir, fsize, (uint8_t *)(hdr + 1));
+			node_createfilepath(hdr->fname, mtime, isdir, fsize, (char *)(hdr + 1));
 
 		/* go to the next entry */
 		hdr += ((fsize + 511) / 512) + 1;

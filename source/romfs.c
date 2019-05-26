@@ -18,10 +18,10 @@
 #include <coreinit/memory.h>
 
 
-/* include the implementation files (static functions are used) */
-#include "romfs_tree.c"
-#include "romfs_devoptab.c"
-#include "romfs_tar.c"
+/* include the implementation files (needed for static functions) */
+#include "romfs_tree.c.impl"
+#include "romfs_devoptab.c.impl"
+#include "romfs_tar.c.impl"
 
 
 /* romfs bynary symbols */

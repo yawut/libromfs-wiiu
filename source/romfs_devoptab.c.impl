@@ -73,9 +73,6 @@ static ssize_t romfs_read(struct _reent *r, void *fd, char *ptr, size_t len)
 {
 	romfs_file_t *fobj = (romfs_file_t *)fd;	
 
-	/* compute the position of read's end */
-	size_t end_pos = fobj->pos + len;
-
 	/* reached file's end */
 	if(fobj->pos >= fobj->fsnode->size)
 		return 0;
