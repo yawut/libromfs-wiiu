@@ -4,7 +4,7 @@ endif
 
 TOPDIR		?=	.
 
-ROMFS_LDFLAGS	:=	-lromfs-wiiu
+ROMFS_LIBS	:=	-lromfs-wiiu
 ROMFS_CFLAGS	:=	-I$(DEVKITPRO)/portlibs/wiiu/include
 
 ifneq ($(strip $(ROMFS)),)

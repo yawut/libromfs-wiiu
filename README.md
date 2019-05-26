@@ -15,7 +15,7 @@ Then, include romfs's makefile and add romfs target to your linking targets alon
     include $(PORTLIBS_PATH)/wiiu/share/romfs-wiiu.mk
     CFLAGS		+=	$(ROMFS_CFLAGS)
     CXXFLAGS	+=	$(ROMFS_CFLAGS)
-    LDFLAGS		+=	$(ROMFS_LDFLAGS)
+    LIBS		+=	$(ROMFS_LIBS)
     OFILES		+=	$(ROMFS_TARGET)
 
 ### Installing
