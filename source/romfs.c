@@ -24,9 +24,9 @@
 #include "romfs_tar.c.impl"
 
 
-/* romfs bynary symbols */
-extern char _binary_romfs_tar_start[] __attribute__((weak));
-extern char _binary_romfs_tar_end[] __attribute__((weak));
+/* romfs binary symbols */
+extern char _binary_romfs_tar_start[];
+extern char _binary_romfs_tar_end[];
 
 /* romfs initialization flag */
 static int32_t romfs_initialised = 0;
@@ -37,10 +37,6 @@ int32_t romfsInit(void)
 	/* already initialized */
 	if (romfs_initialised)
 		return 0;
-
-	/* the romfs binary wasn't properly linked */
-	if (!_binary_romfs_tar_start || !_binary_romfs_tar_end)
-		return -2;
 
 	/* create romfs file entries */
 	tar_create_entries(_binary_romfs_tar_start, _binary_romfs_tar_end);

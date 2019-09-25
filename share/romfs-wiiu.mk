@@ -2,13 +2,12 @@ ifneq ($(strip $(V)), 1)
 	Q ?= @
 endif
 
+ifneq ($(strip $(ROMFS)),)
+
 TOPDIR		?=	.
 
 ROMFS_LIBS	:=	-lromfs-wiiu
 ROMFS_CFLAGS	:=	-I$(DEVKITPRO)/portlibs/wiiu/include
-
-ifneq ($(strip $(ROMFS)),)
-
 ROMFS_TARGET	:=	app.romfs.o
 
 %.romfs.o: $(TOPDIR)/$(ROMFS)
@@ -19,6 +18,8 @@ ROMFS_TARGET	:=	app.romfs.o
 
 else
 
-ROMFS_TARGET	:=	
+ROMFS_LIBS	:=
+ROMFS_CFLAGS	:=
+ROMFS_TARGET	:=
 
 endif
