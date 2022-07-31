@@ -1,4 +1,4 @@
- cmake_minimum_required(VERSION 3.2)
+ cmake_minimum_required(VERSION 3.3) #3.3 for IN_LIST
 
 # add romfs to project
 macro(romfs_add target romfs_dir)
@@ -31,11 +31,20 @@ macro(romfs_add target romfs_dir)
 		GENERATED true
 	)
 
-	set_target_properties(
-		ROMFS
-		PROPERTIES
-		LINKER_LANGUAGE C
-	)
+  	get_property(languages GLOBAL PROPERTY ENABLED_LANGUAGES)
+	if("CXX" IN_LIST languages)
+		set_target_properties(
+			ROMFS
+			PROPERTIES
+			LINKER_LANGUAGE CXX
+		)
+	else()
+		set_target_properties(
+			ROMFS
+			PROPERTIES
+			LINKER_LANGUAGE C
+		)
+	endif()
 
 	# link the tar object static library to the final target
 
